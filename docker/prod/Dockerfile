@@ -32,6 +32,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --from=builder --chown=node:node /home/node/app/dist ./
+COPY --from=builder --chown=node:node /home/node/app/ca.pem ./
 
 EXPOSE 5505
 

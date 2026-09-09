@@ -2,6 +2,30 @@ import { Consumer, EachMessagePayload, Kafka, KafkaConfig } from "kafkajs";
 import { MessageBroker } from "../types/broker";
 import ws from "../socket"
 import config from "config"
+import fs from "fs";
+
+function buildSsl(): KafkaConfig["ssl"] {
+    if (config.has("kafka.ssl.caPath")) {
+        try {
+            const caPath = config.get<string>("kafka.ssl.caPath");
+            if (caPath) return { ca: [fs.readFileSync(caPath, "utf-8")] };
+        } catch {
+            // fall through to ssl:true (public CA, e.g. Confluent)
+        }
+    }
+    return true;
+}
+
+function buildSasl(): KafkaConfig["sasl"] {
+    const mechanism = config.has("kafka.sasl.mechanism")
+        ? config.get<string>("kafka.sasl.mechanism")
+        : "plain";
+    const username = config.get<string>("kafka.sasl.username");
+    const password = config.get<string>("kafka.sasl.password");
+    if (mechanism === "scram-sha-256") return { mechanism: "scram-sha-256", username, password };
+    if (mechanism === "scram-sha-512") return { mechanism: "scram-sha-512", username, password };
+    return { mechanism: "plain", username, password };
+}
 
 export class KafkaBroker implements MessageBroker {
   private consumer: Consumer;
@@ -12,13 +36,9 @@ export class KafkaBroker implements MessageBroker {
     if (process.env.NODE_ENV === "production"){
             kafkaConfig = {
                 ...kafkaConfig,
-                ssl: true,
+                ssl: buildSsl(),
                 connectionTimeout: 450000,
-                sasl:{
-                    mechanism: "plain",
-                    username: config.get("kafka.sasl.username"),
-                    password: config.get("kafka.sasl.password")
-                }
+                sasl: buildSasl()
             }
         }
 
